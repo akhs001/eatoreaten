@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grow or Get Eaten</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root { --prey:#3ddc5a; --risky:#ffd23d; --danger:#ff4040; --ink:#1b1f2e; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#8fd3ff; font-family:'Lilita One', 'Arial Black', system-ui, sans-serif; color:#fff; user-select:none; }
+  canvas { display:block; }
+  .hidden { display:none !important; }
+  .stroke { text-shadow: 0 3px 0 rgba(0,0,0,.35), 0 0 2px #000, 2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000; }
+
+  /* ---------- HUD ---------- */
+  #hud { position:fixed; inset:0; pointer-events:none; }
+  #massBox { position:absolute; left:18px; top:16px; width:270px; background:rgba(20,26,45,.55); border:3px solid rgba(255,255,255,.25); border-radius:16px; padding:10px 14px 12px; backdrop-filter: blur(3px); }
+  #massRow { display:flex; align-items:baseline; gap:10px; }
+  #massBox .lbl { font-size:22px; color:#bfe6ff; letter-spacing:1px; }
+  #massVal { font-size:48px; line-height:1; color:#fff; display:inline-block; transition: color .3s; }
+  #massVal.bump { animation: bump .45s ease-out; }
+  @keyframes bump { 0%{transform:scale(1)} 30%{transform:scale(1.55); color:#7dff8f} 100%{transform:scale(1)} }
+  #rank { font-size:17px; color:#ffe27a; margin-top:2px; }
+  #hpWrap { position:relative; margin-top:8px; height:16px; background:rgba(0,0,0,.45); border-radius:8px; overflow:hidden; border:2px solid rgba(0,0,0,.4); }
+  #hpBar { height:100%; width:100%; background:linear-gradient(#ff7676,#e0303a); transition: width .15s; }
+  #hpTxt { position:absolute; inset:0; font-size:12px; text-align:center; line-height:13px; }
+  #goal { margin-top:9px; font-size:14px; color:#e8f4ff; }
+  #goalBarWrap { margin-top:4px; height:8px; background:rgba(0,0,0,.4); border-radius:5px; overflow:hidden; }
+  #goalBar { height:100%; width:0; background:linear-gradient(90deg,#6ff,#7dff8f); transition: width .3s; }
+  #evoBadge { margin-top:8px; font-size:15px; padding:4px 8px; border-radius:8px; background:rgba(255,215,64,.25); color:#ffe27a; display:inline-block; }
+  #evoBadge:empty { display:none; }
+
+  #chain { position:absolute; right:18px; top:16px; width:210px; background:rgba(20,26,45,.55); border:3px solid rgba(255,255,255,.25); border-radius:16px; padding:8px 10px; backdrop-filter: blur(3px); }
+  #chain .ttl { font-size:15px; color:#bfe6ff; text-align:center; margin-bottom:4px; letter-spacing:1px; }
+  .crow { display:flex; align-items:center; gap:6px; font-size:15px; padding:3px 4px; border-radius:8px; transition: background .4s; }
+  .crow .ic { width:22px; text-align:center; }
+  .crow .nm { flex:1; }
+  .crow .ms { font-size:12px; color:#cdd; width:30px; text-align:right; }
+  .crow .st { width:16px; height:16px; border-radius:50%; border:2px solid rgba(0,0,0,.5); }
+  .crow.prey .st { background:var(--prey); } .crow.risky .st { background:var(--risky); } .crow.danger .st { background:var(--danger); }
+  .crow.flip { animation: flip 1.4s ease-out; }
+  @keyframes flip { 0%,40% { background:rgba(61,220,90,.7); transform:scale(1.08);} 100% { background:transparent; transform:scale(1);} }
+
+  #crosshair { position:absolute; left:50%; top:50%; width:8px; height:8px; margin:-4px; border-radius:50%; background:rgba(255,255,255,.75); box-shadow:0 0 0 2px rgba(0,0,0,.35); }
+  #banner { position:absolute; left:50%; top:19%; transform:translateX(-50%); text-align:center; font-size:38px; white-space:nowrap; opacity:0; }
+  #banner small { display:block; font-size:20px; color:#fff; opacity:.95; margin-top:4px; }
+  #banner.show { animation: bannerIn .35s cubic-bezier(.2,1.6,.4,1) forwards; }
+  #banner.danger { color:#ff5a5a; } #banner.prey { color:#7dff8f; } #banner.gold { color:#ffd84a; } #banner.info { color:#bfe6ff; font-size:30px; }
+  @keyframes bannerIn { from { opacity:0; transform:translateX(-50%) scale(.4);} to { opacity:1; transform:translateX(-50%) scale(1);} }
+  #toast { position:absolute; left:50%; top:9%; transform:translateX(-50%); font-size:22px; opacity:0; transition:opacity .4s; color:#e8f4ff; }
+  #toast.show { opacity:1; }
+  #runWarn { position:absolute; left:50%; bottom:20%; transform:translateX(-50%); font-size:44px; color:#ff4545; opacity:0; }
+  #runWarn.on { opacity:1; animation: pulse .5s infinite alternate; }
+  @keyframes pulse { from { transform:translateX(-50%) scale(1);} to { transform:translateX(-50%) scale(1.15);} }
+  #help { position:absolute; left:50%; bottom:14px; transform:translateX(-50%); font-size:15px; background:rgba(20,26,45,.5); padding:6px 14px; border-radius:10px; transition:opacity 1s; white-space:nowrap; }
+
+  #dmgVig { position:fixed; inset:0; pointer-events:none; box-shadow: inset 0 0 160px 40px rgba(255,0,0,.85); opacity:0; }
+  #dangerVig { position:fixed; inset:0; pointer-events:none; box-shadow: inset 0 0 220px 30px rgba(170,0,0,.55); opacity:0; transition: opacity .3s; }
+
+  /* ---------- nameplates & popups ---------- */
+  #plates, #fx { position:fixed; inset:0; pointer-events:none; overflow:hidden; }
+  .plate { position:absolute; left:0; top:0; text-align:center; font-size:13px; line-height:1.1; white-space:nowrap; will-change:transform; }
+  .plate b { display:block; font-weight:normal; font-size:15px; }
+  .plate .tag { display:inline-block; margin-top:1px; padding:1px 7px; border-radius:7px; font-size:13px; background:rgba(0,0,0,.5); }
+  .plate.prey .tag { color:var(--prey); } .plate.risky .tag { color:var(--risky); } .plate.danger .tag { color:var(--danger); }
+  .plate.danger b { color:#ffb3b3; }
+  .plate .m { display:block; font-size:11px; color:#e6eef8; }
+  .plate .hp { width:56px; height:5px; margin:2px auto 0; background:rgba(0,0,0,.5); border-radius:3px; overflow:hidden; }
+  .plate .hp i { display:block; height:100%; background:#ff5a5a; }
+  .plate.focus { font-size:16px; } .plate.focus b { font-size:22px; } .plate.focus .tag { font-size:18px; padding:2px 10px; } .plate.focus .m { font-size:14px; } .plate.focus .hp { width:90px; height:7px; }
+  .plate.eat .tag { color:#ffd84a; animation: pulse2 .4s infinite alternate; }
+  @keyframes pulse2 { from{transform:scale(1)} to{transform:scale(1.2)} }
+  .plate.alpha b { color:#ffd84a; }
+  .pop { position:absolute; left:0; top:0; white-space:nowrap; will-change:transform, opacity; }
+  .pop.mass { font-size:40px; color:#7dff8f; }
+  .pop.dmg { font-size:22px; color:#fff; }
+  .pop.dmg.big { color:#ffd84a; font-size:28px; }
+  .pop.hurt { font-size:24px; color:#ff6060; }
+
+  /* ---------- overlays ---------- */
+  .overlay { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:radial-gradient(ellipse at center, rgba(10,20,40,.35), rgba(10,20,40,.8)); }
+  .overlay h1 { font-size:78px; margin:0; line-height:1; letter-spacing:2px; }
+  .overlay h2 { font-size:30px; margin:12px 0 0; color:#ffd84a; font-weight:normal; }
+  .overlay p { font-size:20px; max-width:640px; color:#e6eef8; line-height:1.35; }
+  .btn { pointer-events:auto; font-family:inherit; font-size:30px; color:#fff; background:linear-gradient(#4fdd5f,#22a83a); border:4px solid #116622; border-radius:16px; padding:10px 46px; cursor:pointer; box-shadow:0 6px 0 #0b4a17; margin-top:14px; }
+  .btn:hover { filter:brightness(1.1); transform:translateY(-1px); }
+  .btn:active { transform:translateY(4px); box-shadow:0 2px 0 #0b4a17; }
+  #start h1 { font-size:92px; color:#ffd84a; }
+  #start h1 span { color:#ff5a5a; }
+  .keys { display:grid; grid-template-columns:auto auto; gap:4px 18px; font-size:18px; margin:10px 0 6px; text-align:left; }
+  .keys kbd { font-family:inherit; background:#fff; color:var(--ink); border-radius:6px; padding:0 7px; box-shadow:0 3px 0 #889; }
+  .legend { font-size:18px; margin-top:6px; }
+  .legend span { margin:0 10px; }
+  #death h1 { color:#ff5050; }
+  #death small, #win small { font-size:16px; color:#cfd8e6; margin-top:10px; }
+  #win h1 { color:#ffd84a; }
+  #evolve h1 { font-size:96px; color:#7dff8f; animation: bannerIn2 .5s cubic-bezier(.2,1.6,.4,1); }
+  @keyframes bannerIn2 { from { transform:scale(.3); opacity:0;} to { transform:scale(1); opacity:1;} }
+  .cards { display:flex; gap:22px; margin-top:22px; flex-wrap:wrap; justify-content:center; }
+  .card { pointer-events:auto; cursor:pointer; width:220px; padding:18px 14px; border-radius:20px; background:rgba(25,35,60,.85); border:4px solid rgba(255,255,255,.3); transition: transform .15s, border-color .15s; }
+  .card:hover { transform:translateY(-8px) scale(1.04); border-color:#ffd84a; }
+  .card .em { font-size:64px; }
+  .card .cn { font-size:30px; margin-top:4px; }
+  .card .cd { font-size:16px; color:#cfd8e6; margin-top:6px; min-height:40px; }
+  .card .cs { font-size:20px; color:#7dff8f; margin-top:8px; }
+  .card .ck { font-size:13px; color:#99a; margin-top:6px; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+
+<div id="plates"></div>
+<div id="fx"></div>
+<div id="dangerVig"></div>
+<div id="dmgVig"></div>
+
+<div id="hud" class="hidden">
+  <div id="massBox">
+    <div id="massRow"><span class="lbl stroke">MASS</span><span id="massVal" class="stroke">4</span></div>
+    <div id="rank" class="stroke">Hatchling</div>
+    <div id="hpWrap"><div id="hpBar"></div><span id="hpTxt" class="stroke"></span></div>
+    <div id="goal"><div id="goalTxt" class="stroke"></div><div id="goalBarWrap"><div id="goalBar"></div></div></div>
+    <div id="evoBadge" class="stroke"></div>
+  </div>
+  <div id="chain"><div class="ttl stroke">FOOD CHAIN</div><div id="chainRows"></div></div>
+  <div id="crosshair"></div>
+  <div id="toast" class="stroke"></div>
+  <div id="banner" class="stroke"></div>
+  <div id="runWarn" class="stroke">⚠ RUN! ⚠</div>
+  <div id="help" class="stroke">WASD move · Mouse look · SHIFT sprint · SPACE jump · CLICK / E bite · Wheel zoom</div>
+</div>
+
+<div id="start" class="overlay">
+  <h1 class="stroke">GROW <span>OR</span> GET EATEN</h1>
+  <p class="stroke">You are tiny. Almost everything out here wants to eat you.<br>Eat smaller creatures, grow huge, and become the Apex Predator.</p>
+  <div class="keys stroke">
+    <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></div><div>Move</div>
+    <div><kbd>Mouse</kbd></div><div>Camera</div>
+    <div><kbd>Shift</kbd></div><div>Sprint</div>
+    <div><kbd>Space</kbd></div><div>Jump</div>
+    <div><kbd>Click</kbd> / <kbd>E</kbd></div><div>Bite / Eat</div>
+  </div>
+  <div class="legend stroke"><span>🟢 PREY — eat it</span><span>🟡 RISKY — fair fight</span><span>🔴 DANGER — run</span></div>
+  <button id="playBtn" class="btn stroke">PLAY</button>
+</div>
+
+<div id="evolve" class="overlay hidden">
+  <h1 class="stroke">EVOLVE!</h1>
+  <p class="stroke">Choose your mutation</p>
+  <div class="cards">
+    <div class="card" data-evo="predator"><div class="em">🦷</div><div class="cn stroke">PREDATOR</div><div class="cd">Huge jaws lined with teeth.</div><div class="cs stroke">+30% Bite Damage</div><div class="ck">press 1</div></div>
+    <div class="card" data-evo="runner"><div class="em">🦵</div><div class="cn stroke">RUNNER</div><div class="cd">Long powerful legs. Nothing escapes.</div><div class="cs stroke">+20% Move Speed</div><div class="ck">press 2</div></div>
+    <div class="card" data-evo="tank"><div class="em">🛡️</div><div class="cn stroke">TANK</div><div class="cd">Armored shell covered in spikes.</div><div class="cs stroke">+40% Health</div><div class="ck">press 3</div></div>
+  </div>
+</div>
+
+<div id="death" class="overlay hidden">
+  <h1 class="stroke">YOU GOT EATEN!</h1>
+  <p id="deathBy" class="stroke"></p>
+  <button id="retryBtn" class="btn stroke">TRY AGAIN</button>
+  <small class="stroke">or press SPACE</small>
+</div>
+
+<div id="win" class="overlay hidden">
+  <h1 class="stroke">ALPHA DEFEATED!</h1>
+  <h2 class="stroke">YOU ARE NOW THE APEX PREDATOR 👑</h2>
+  <p id="winStats" class="stroke"></p>
+  <button id="againBtn" class="btn stroke">PLAY AGAIN</button>
+</div>
+
+<div id="paused" class="overlay hidden">
+  <h1 class="stroke">PAUSED</h1>
+  <button id="resumeBtn" class="btn stroke">RESUME</button>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
